@@ -63,7 +63,7 @@ def ensure_proxy(credentials: dict[str, str]) -> None:
     env["NVIDIA_API_KEY"] = credentials["NVIDIA_API_KEY"]
     env["LITELLM_MASTER_KEY"] = credentials["LITELLM_MASTER_KEY"]
     command = [
-        str(find_python()), "-m", "litellm",
+        str(find_litellm()),
         "--config", str(config),
         "--host", "127.0.0.1",
         "--port", str(PORT),
@@ -84,6 +84,18 @@ def ensure_proxy(credentials: dict[str, str]) -> None:
     raise RuntimeError(
         "LiteLLM did not become healthy within 60 seconds. "
         f"Review the local log at {LOG_FILE}. Do not post that log publicly without checking it for sensitive details."
+    )
+
+
+def find_litellm() -> Path:
+    """Return the LiteLLM console script from Megatron's virtual environment."""
+    relative = Path("Scripts/litellm.exe") if os.name == "nt" else Path("bin/litellm")
+    candidate = ROOT / "venv" / relative
+    if candidate.is_file():
+        return candidate
+    raise RuntimeError(
+        f"LiteLLM executable was not found at {candidate}. "
+        "Rerun the Megatron installer to repair the virtual environment."
     )
 
 
