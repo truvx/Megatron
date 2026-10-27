@@ -1,0 +1,35 @@
+- id: llm-pi-ai
+  config:
+    providers:
+      litellm-nemotron:
+        displayName: Nemotron via LiteLLM
+        apiKeyEnv: LITELLM_MASTER_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:4000/v1
+        reasoning: high
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+        models:
+          - id: nemotron
+            name: Nemotron 3.5 Super VL 120B
+            reasoningEfforts:
+              off: none
+              low: low
+              high: high
+
+- id: agent-default-model
+  config:
+    provider: litellm-nemotron
+    model: nemotron
+
+- id: claude-compat
+  config:
+    enableSkills: true
+    enableRules: true
+    enableAgents: true
+    enableHooks: false
+    enableMcp: false
+    enablePlugins: true
+    enablePluginMcp: false
+    enablePluginManager: true
