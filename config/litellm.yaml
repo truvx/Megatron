@@ -11,7 +11,10 @@ model_list:
       model: openai/nvidia/nemotron-3.5-super-vl-120b-a12b
       api_base: https://integrate.api.nvidia.com/v1
       api_key: os.environ/NVIDIA_API_KEY
-      reasoning_effort: none
+      reasoning_effort: low
+      extra_body:
+        chat_template_kwargs:
+          enable_thinking: false
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

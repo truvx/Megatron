@@ -1,14 +1,22 @@
+# Local secrets and runtime files
 .env
 .env.*
 !.env.example
-env
-secrets/
+credentials.json
+litellm-master-key
 *master-key*
+secrets/
 *.pem
 *.key
+*.p12
+*.pfx
 *.log
-*.pid
-.DS_Store
-__pycache__/
+logs/
+backups/
 .venv/
 venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+Thumbs.db
