@@ -114,7 +114,7 @@ def find_claude() -> str | None:
 
 
 def main() -> int:
-    mode = "nemotron-fast" if len(sys.argv) > 1 and sys.argv[1].lower() in {"fast", "--fast", "nemotron-fast"} else "nemotron"
+    mode = "claude-nemotron-fast" if len(sys.argv) > 1 and sys.argv[1].lower() in {"fast", "--fast", "nemotron-fast", "claude-nemotron-fast"} else "claude-nemotron"
     try:
         if not CREDENTIALS.is_file():
             print("Megatron is not configured. Run Start-Megatron.command/.sh/.cmd first.", file=sys.stderr)
@@ -129,7 +129,7 @@ def main() -> int:
         env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{PORT}"
         env["ANTHROPIC_AUTH_TOKEN"] = credentials["LITELLM_MASTER_KEY"]
         env["ANTHROPIC_MODEL"] = mode
-        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "nemotron-fast"
+        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-nemotron-fast"
         env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = mode
         env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = mode
         env.pop("ANTHROPIC_API_KEY", None)
