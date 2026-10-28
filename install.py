@@ -535,7 +535,7 @@ def main() -> int:
             raise RuntimeError("One or more configuration files were not created.")
         local_check = run_command(
             [str(expected_python), "-c",
-             "import sys, yaml, litellm; cfg=yaml.safe_load(open(sys.argv[1], encoding='utf-8')); names={m.get('model_name') for m in cfg.get('model_list', [])}; assert {'nemotron', 'nemotron-fast'} <= names; print('LiteLLM import and configuration validation passed.')",
+             "import sys, yaml, litellm; cfg=yaml.safe_load(open(sys.argv[1], encoding='utf-8')); names={m.get('model_name') for m in cfg.get('model_list', [])}; assert {'claude-nemotron', 'claude-nemotron-fast'} <= names; print('LiteLLM import and configuration validation passed.')",
              str(CONFIG_DIR / "litellm.yaml")], timeout=90,
         )
         if local_check.returncode != 0:
