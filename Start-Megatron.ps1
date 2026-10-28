@@ -1,5 +1,20 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+
+# Megatron may need elevated rights to repair restrictive ACLs left by an older
+# installation. Relaunch this bootstrap as the same user with UAC elevation.
+$CurrentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$CurrentPrincipal = [Security.Principal.WindowsPrincipal]::new($CurrentIdentity)
+$IsAdministrator = $CurrentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $IsAdministrator) {
+    try {
+        $Elevated = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"')) -Verb RunAs -Wait -PassThru
+        exit $Elevated.ExitCode
+    } catch {
+        Write-Host 'Administrator permission was not granted. Megatron cannot repair Windows file permissions without elevation.' -ForegroundColor Red
+        exit 1
+    }
+}
 $RepoUrl = 'https://github.com/truvx/Megatron.git'
 $ArchiveUrl = 'https://github.com/truvx/Megatron/archive/refs/heads/main.zip'
 $LocalDir = $PSScriptRoot
