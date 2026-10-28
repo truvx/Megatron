@@ -102,15 +102,21 @@ def existing_paths(command_name: str = "megatron") -> list[Path]:
 
 
 def repair_windows_access(path: Path) -> None:
-    """Repair restrictive Windows ACLs and verify the files needed for backup are readable."""
-    if os.name != "nt" or not path.exists():
-        return
-    icacls = shutil.which("icacls.exe") or shutil.which("icacls")
-    whoami = shutil.which("whoami.exe") or shutil.which("whoami")
-    takeown = shutil.which("takeown.exe") or shutil.which("takeown")
-    if not icacls or not whoami:
+    """Best-effort repair of restrictive Windows ACLs; never let repair itself abort setup."""
+    # Some Windows installations deny metadata access to an old virtual environment.
+    # Even Path.exists()/shutil.which() can raise PermissionError on those systems,
+    # so all discovery and repair work must be inside the guarded block.
+    if os.name != "nt":
         return
     try:
+        if not path.exists():
+            return
+        icacls = shutil.which("icacls.exe") or shutil.which("icacls")
+        whoami = shutil.which("whoami.exe") or shutil.which("whoami")
+        takeown = shutil.which("takeown.exe") or shutil.which("takeown")
+        if not icacls or not whoami:
+            say("Warning: Windows ACL tools were unavailable; skipping permission repair.")
+            return
         identity = subprocess.run(
             [whoami, "/user", "/fo", "csv", "/nh"],
             capture_output=True, text=True, check=False, timeout=10,
@@ -164,8 +170,11 @@ def repair_windows_access(path: Path) -> None:
                     handle.read(1)
             except OSError:
                 say(f"Warning: Windows permission repair could not restore read access to {target}.")
-    except (OSError, subprocess.SubprocessError) as exc:
-        say(f"Warning: Windows permission repair could not complete ({type(exc).__name__}).")
+    except Exception as exc:
+        # Permission repair is only a recovery aid. An inaccessible legacy venv
+        # must be reported by the subsequent guarded Python/validation step, not
+        # escape here as an unhelpful bare [WinError 5].
+        say(f"Warning: Windows permission repair could not complete ({type(exc).__name__}: {exc}).")
 
 def create_backup(paths: Iterable[Path]) -> Path:
     """Make a timestamped, local backup before the installer changes any managed files."""
