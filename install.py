@@ -337,9 +337,19 @@ def get_nvidia_key(existing: str | None) -> str:
     open_key_page()
     say("Generate an API key on the NVIDIA page, then return to this terminal.")
     while True:
-        key = getpass.getpass("Paste your NVIDIA API key here (input hidden): ").strip()
+        if os.name == "nt":
+            # Python getpass can read only one character from some Windows
+            # terminal/launcher combinations when clipboard paste is used.
+            # Use standard line input on Windows so Ctrl+V paste is reliable.
+            # The key is visibly echoed, so warn the user before collecting it.
+            say("NOTICE: Windows terminal paste is unreliable in hidden password mode.")
+            say("For this Windows prompt only, the key will be visible while you paste.")
+            say("Do not share your screen or take a screenshot while entering it.")
+            key = input("Paste your NVIDIA API key here (visible input): ").strip()
+        else:
+            key = getpass.getpass("Paste your NVIDIA API key here (input hidden): ").strip()
         if not key:
-            say("No characters were received. The key input is hidden while you paste; try Ctrl+V or right-click, then press Enter.")
+            say("No characters were received. Copy the complete NVIDIA API key and paste it into this prompt.")
             continue
         if "\n" in key or "\r" in key or len(key) < 10:
             say(f"Received {len(key)} characters, which is too short for an NVIDIA API key. Check that you copied the actual key, not a page label or URL.")
