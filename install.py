@@ -708,11 +708,30 @@ def main() -> int:
             raise RuntimeError("The LiteLLM virtual environment is missing its Python executable.")
         if not (CONFIG_DIR / "litellm.yaml").is_file() or not CREDENTIALS.is_file():
             raise RuntimeError("One or more configuration files were not created.")
-        local_check = run_command(
-            [str(expected_python), "-c",
-             "import sys, yaml, litellm; cfg=yaml.safe_load(open(sys.argv[1], encoding='utf-8')); names={m.get('model_name') for m in cfg.get('model_list', [])}; assert {'claude-nemotron', 'claude-nemotron-fast'} <= names; print('LiteLLM import and configuration validation passed.')",
-             str(CONFIG_DIR / "litellm.yaml")], timeout=90,
-        )
+        if os.name == "nt":
+            # A previous installation may have left the environment executable
+            # with restrictive ACLs. Repair/check the exact executable before launch.
+            repair_windows_access(VENV)
+            try:
+                with expected_python.open("rb") as handle:
+                    handle.read(1)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"Windows cannot read the Megatron Python executable: {expected_python}. "
+                    "The configuration files were created and the backup was preserved. "
+                    "Close other Megatron/Python processes and rerun the launcher as the same Windows user."
+                ) from exc
+        try:
+            local_check = run_command(
+                [str(expected_python), "-c",
+                 "import sys, yaml, litellm; cfg=yaml.safe_load(open(sys.argv[1], encoding='utf-8')); names={m.get('model_name') for m in cfg.get('model_list', [])}; assert {'claude-nemotron', 'claude-nemotron-fast'} <= names; print('LiteLLM import and configuration validation passed.')",
+                 str(CONFIG_DIR / "litellm.yaml")], timeout=90,
+            )
+        except OSError as exc:
+            raise RuntimeError(
+                f"Windows could not start Megatron's local validation process ({exc}). "
+                f"Python executable: {expected_python}. Configuration and backup were preserved."
+            ) from exc
         if local_check.returncode != 0:
             raise RuntimeError("LiteLLM or its configuration failed the local validation check.")
         version = run_claude(claude_command, ["--version"], timeout=60)
