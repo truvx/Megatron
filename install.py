@@ -339,11 +339,17 @@ def get_nvidia_key(existing: str | None) -> str:
     while True:
         key = getpass.getpass("Paste your NVIDIA API key here (input hidden): ").strip()
         if not key:
-            say("The key was empty. Please paste the key again.")
+            say("No characters were received. The key input is hidden while you paste; try Ctrl+V or right-click, then press Enter.")
             continue
         if "\n" in key or "\r" in key or len(key) < 10:
-            say("That does not look like a valid API key. Please try again.")
+            say(f"Received {len(key)} characters, which is too short for an NVIDIA API key. Check that you copied the actual key, not a page label or URL.")
             continue
+
+        # Confirm that paste worked without exposing the secret in terminal logs.
+        preview = key[:6] + "…" + key[-4:] if len(key) > 12 else "*" * len(key)
+        say(f"API key received: {preview} ({len(key)} characters; middle hidden).")
+        if not key.startswith("nvapi-"):
+            say("Warning: this key does not start with 'nvapi-'. Confirm you copied an NVIDIA API key, not another token.")
         ok, message = verify_nvidia_key(key)
         say(message)
         if ok is True:
