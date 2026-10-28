@@ -414,9 +414,9 @@ def install_or_update_claude() -> list[str]:
 
 def install_python_environment() -> Path:
     base_python = sys.executable
-    check = run_command([base_python, "-c", "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)"], timeout=30)
+    check = run_command([base_python, "-c", "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] < (3, 15) else 1)"], timeout=30)
     if check.returncode != 0:
-        raise RuntimeError("Python 3.10 or newer is required. Megatron's starter can install a compatible Python runtime; rerun it after bootstrap finishes.")
+        raise RuntimeError("Megatron requires Python 3.10–3.14 for its pinned LiteLLM version. Rerun Start-Megatron.cmd so it can select or install Python 3.12.")
     if VENV.exists() and not (VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")).exists():
         # Don't delete a damaged or custom directory automatically; first preserve it in the backup.
         raise RuntimeError(f"The existing virtual environment looks incomplete: {VENV}. It has not been deleted. Review the automatic backup and repair it manually.")
