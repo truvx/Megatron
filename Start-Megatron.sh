@@ -25,7 +25,7 @@ download_url() {
 
 python_works() {
   local candidate="$1"
-  "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1
+  "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) and sys.version_info < (3, 15) else 1)' >/dev/null 2>&1
 }
 
 PYTHON=""
@@ -38,7 +38,7 @@ for candidate in python3 python; do
 done
 
 if [[ -z "$PYTHON" ]]; then
-  say "Python 3.10+ is not available. Megatron will install a user-local Python runtime using uv."
+  say "A compatible Python 3.10–3.14 is not available. Megatron will install Python 3.12 using uv."
   UV="$(command -v uv 2>/dev/null || true)"
   if [[ -z "$UV" ]]; then
     download_url "https://astral.sh/uv/install.sh" "$WORK/install-uv.sh"
