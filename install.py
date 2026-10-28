@@ -102,7 +102,7 @@ def existing_paths(command_name: str = "megatron") -> list[Path]:
 
 
 def repair_windows_access(path: Path) -> None:
-    """Try to recover access to Megatron files after a restrictive Windows ACL."""
+    """Repair restrictive Windows ACLs and verify the files needed for backup are readable."""
     if os.name != "nt" or not path.exists():
         return
     icacls = shutil.which("icacls.exe") or shutil.which("icacls")
@@ -121,27 +121,49 @@ def repair_windows_access(path: Path) -> None:
             return
         sid = match.group(0)
 
-        # First try a non-destructive grant, preserving existing ACL entries.
-        grant = subprocess.run(
-            [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
-            capture_output=True, text=True, check=False, timeout=90,
-        )
-        if grant.returncode == 0:
-            return
-
-        # If the current user cannot update the ACL, try taking ownership of this
-        # app-specific directory, then grant access. This does not touch other folders.
+        # icacls /C can return success even when individual files failed. Do not
+        # treat its exit code alone as proof that the ACL repair worked.
         if takeown:
             subprocess.run(
                 [takeown, "/F", str(path), "/R", "/D", "Y"],
                 capture_output=True, text=True, check=False, timeout=120,
             )
-            grant = subprocess.run(
-                [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
-                capture_output=True, text=True, check=False, timeout=120,
+        subprocess.run(
+            [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
+            capture_output=True, text=True, check=False, timeout=120,
+        )
+
+        # Repair the exact files that previously caused backup failures. Grant
+        # access to each file explicitly as well as the containing directory.
+        critical_files = [
+            path / "credentials.json",
+            path / "config" / "litellm.yaml",
+            path / "launch.py",
+            path / "restore.py",
+        ]
+        for target in critical_files:
+            if not target.exists():
+                continue
+            try:
+                with target.open("rb") as handle:
+                    handle.read(1)
+                continue
+            except OSError:
+                pass
+            if takeown:
+                subprocess.run(
+                    [takeown, "/F", str(target)],
+                    capture_output=True, text=True, check=False, timeout=30,
+                )
+            subprocess.run(
+                [icacls, str(target), "/grant", f"*{sid}:F", "/C"],
+                capture_output=True, text=True, check=False, timeout=30,
             )
-        if grant.returncode != 0:
-            say("Warning: Windows permission repair did not fully succeed. Megatron will still protect existing files and stop if backup is incomplete.")
+            try:
+                with target.open("rb") as handle:
+                    handle.read(1)
+            except OSError:
+                say(f"Warning: Windows permission repair could not restore read access to {target}.")
     except (OSError, subprocess.SubprocessError) as exc:
         say(f"Warning: Windows permission repair could not complete ({type(exc).__name__}).")
 
