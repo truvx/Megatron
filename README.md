@@ -24,14 +24,16 @@ The installer will:
 4. Create an isolated Megatron virtual environment and install the pinned LiteLLM dependency.
 5. Open NVIDIA's official [Nemotron API page](https://build.nvidia.com/nvidia/nemotron-3.5-super-vl-120b-a12b) in your browser.
 6. Prompt for `Paste your NVIDIA API key here:` in the terminal. Input is hidden while you paste. The installer verifies the key when NVIDIA's endpoint is reachable.
-7. Write local credentials, configure the LiteLLM proxy, and create a launcher.
+7. Ask which terminal command the user wants (default: `megatron`), then write local credentials, configure the LiteLLM proxy, and create a launcher using that name.
 8. Check that the configuration and Claude Code installation are present, then print the launch and restore commands.
 
 All software installation, updates, and configuration are performed through the terminal. The browser is opened only for NVIDIA API-key generation. On macOS or Linux, file-manager double-click behavior depends on the desktop security settings; if needed, run the launcher from Terminal. On Windows, double-click `Start-Megatron.cmd`.
 
 ## Launching Nemotron
 
-After successful setup, use the command the installer prints. Common commands are:
+During setup, choose a command name such as `megatron`, `nemotron`, or `my-ai`. The default is `megatron`; the installer remembers the previous choice on later runs. The command is added to your user PATH where supported. On Windows, reopen the terminal after setup so the updated user PATH is picked up. Use the command name printed by the installer.
+
+For the default name, common commands are:
 
 - `megatron` — start Claude Code using the `claude-nemotron` alias.
 - `megatron fast` — start Claude Code using the `claude-nemotron-fast` alias.
