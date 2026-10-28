@@ -436,6 +436,27 @@ def install_python_environment() -> Path:
         if result.returncode != 0:
             raise RuntimeError("Could not create a Python virtual environment. On Debian/Ubuntu, install python3-venv and rerun Megatron.")
     py = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+
+    # Some managed Python distributions or interrupted venv creations can leave
+    # a valid venv Python executable without pip. Bootstrap pip before using it.
+    pip_check = run_command([str(py), "-c", "import pip"], timeout=30)
+    if pip_check.returncode != 0:
+        say("pip is missing from the Megatron environment; attempting to bootstrap it...")
+        ensurepip = run_command([str(py), "-m", "ensurepip", "--upgrade"], timeout=300)
+        pip_check = run_command([str(py), "-c", "import pip"], timeout=30)
+        if pip_check.returncode != 0:
+            uv = shutil.which("uv.exe") or shutil.which("uv")
+            if uv:
+                say("Python's ensurepip was unavailable; using uv to bootstrap pip...")
+                run_command([uv, "pip", "install", "--python", str(py), "pip"], timeout=600)
+                pip_check = run_command([str(py), "-c", "import pip"], timeout=30)
+        if pip_check.returncode != 0:
+            raise RuntimeError(
+                "Could not bootstrap pip in the Megatron environment. "
+                "The environment and automatic backup were preserved. "
+                "Install pip/ensurepip for this Python distribution, then rerun Megatron."
+            )
+
     say("Installing/updating the pinned LiteLLM dependency in Megatron's isolated environment...")
     result = run_command([str(py), "-m", "pip", "install", "--upgrade", "pip"], timeout=600)
     if result.returncode != 0:
