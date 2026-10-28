@@ -114,7 +114,7 @@ def repair_windows_access(path: Path) -> None:
             [whoami, "/user", "/fo", "csv", "/nh"],
             capture_output=True, text=True, check=False, timeout=10,
         )
-        match = re.search(r"S-1-\\d+(?:-\\d+)+", identity.stdout)
+        match = re.search(r"S-1-\d+(?:-\d+)+", identity.stdout)
         if identity.returncode == 0 and match:
             # Grant this user full access without removing existing ACL entries.
             subprocess.run(
