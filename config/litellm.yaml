@@ -1,12 +1,12 @@
 model_list:
-  - model_name: nemotron
+  - model_name: claude-nemotron
     litellm_params:
       model: openai/nvidia/nemotron-3.5-super-vl-120b-a12b
       api_base: https://integrate.api.nvidia.com/v1
       api_key: os.environ/NVIDIA_API_KEY
       reasoning_effort: high
 
-  - model_name: nemotron-fast
+  - model_name: claude-nemotron-fast
     litellm_params:
       model: openai/nvidia/nemotron-3.5-super-vl-120b-a12b
       api_base: https://integrate.api.nvidia.com/v1
