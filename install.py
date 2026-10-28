@@ -505,10 +505,9 @@ def choose_command_name() -> str:
     except OSError:
         pass
     default = previous or "megatron"
-    say("Choose the terminal command used to launch Megatron.")
-    say("Use letters/numbers, hyphens or underscores; do not include a path or spaces.")
+    say("How would you like to call your agent?")
     while True:
-        value = input(f"Terminal command [{default}]: ").strip() or default
+        value = input(f"[{default}]: ").strip() or default
         if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", value):
             return value
         say("Invalid command name. Start with a letter and use only letters, numbers, '-' or '_' (maximum 32 characters).")
