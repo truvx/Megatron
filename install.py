@@ -489,6 +489,11 @@ def install_python_environment() -> Path:
     if check.returncode != 0:
         raise RuntimeError("Megatron requires Python 3.10–3.14 for its pinned LiteLLM version. Rerun Start-Megatron.cmd so it can select or install Python 3.12.")
     venv_python = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    # A previous Megatron installation may have left restrictive ACLs on the
+    # virtual environment even when the top-level configuration is now readable.
+    if os.name == "nt" and VENV.exists():
+        say("Checking Windows permissions on Megatron's existing Python environment...")
+        repair_windows_access(VENV)
     if VENV.exists() and not venv_python.is_file():
         # Don't delete a damaged or custom directory automatically.
         raise RuntimeError(f"The existing virtual environment looks incomplete: {VENV}. It has not been deleted. Review the automatic backup and repair it manually.")
@@ -497,7 +502,16 @@ def install_python_environment() -> Path:
         if venv_check.returncode != 0:
             stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
             preserved = VENV.with_name(f"venv-incompatible-{stamp}")
-            VENV.rename(preserved)
+            try:
+                VENV.rename(preserved)
+            except OSError as exc:
+                if os.name == "nt" and getattr(exc, "winerror", None) == 5:
+                    raise RuntimeError(
+                        f"Windows denied access while preserving the existing Python environment at {VENV}. "
+                        "Megatron did not delete it. Close any terminals or Python processes using this folder, "
+                        "then rerun Start-Megatron.cmd and approve the administrator prompt."
+                    ) from exc
+                raise
             say(f"Preserved the incompatible Python environment at: {preserved}")
     if not VENV.exists():
         say("Creating Megatron's isolated Python environment...")
