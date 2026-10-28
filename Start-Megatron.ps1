@@ -9,7 +9,7 @@ New-Item -ItemType Directory -Path $Work | Out-Null
 function Say([string]$Text) { Write-Host $Text }
 function Test-Python([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-    & $Path -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' *> $null
+    & $Path -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) and sys.version_info < (3, 15) else 1)' *> $null
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -22,7 +22,7 @@ try {
     if (-not $Python) {
         $PyLauncher = Get-Command 'py.exe' -ErrorAction SilentlyContinue
         if ($PyLauncher) {
-            & $PyLauncher.Source -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' *> $null
+            & $PyLauncher.Source -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) and sys.version_info < (3, 15) else 1)' *> $null
             if ($LASTEXITCODE -eq 0) {
                 $Python = (& $PyLauncher.Source -3 -c 'import sys; print(sys.executable)' | Select-Object -First 1).Trim()
             }
@@ -30,7 +30,7 @@ try {
     }
 
     if (-not $Python) {
-        Say 'Python 3.10+ is not available. Megatron will install a user-local Python runtime using uv.'
+        Say 'A compatible Python 3.10–3.14 is not available. Megatron will install Python 3.12 using uv.'
         $UvCommand = Get-Command 'uv.exe' -ErrorAction SilentlyContinue
         $Uv = if ($UvCommand) { $UvCommand.Source } else { $null }
         if (-not $Uv) {
