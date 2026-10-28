@@ -40,6 +40,7 @@ BACKUPS = ROOT / "backups"
 SOURCE = Path(__file__).resolve().parent
 CONFIG_DIR = ROOT / "config"
 CREDENTIALS = ROOT / "credentials.json"
+COMMAND_NAME_FILE = ROOT / "command_name.txt"
 VENV = ROOT / "venv"
 LOGS = ROOT / "logs"
 
@@ -62,7 +63,7 @@ def shell_profile_path() -> Path | None:
     return None
 
 
-def existing_paths() -> list[Path]:
+def existing_paths(command_name: str = "megatron") -> list[Path]:
     """Files to snapshot, including absent paths that this installer may create."""
     home = Path.home()
     managed = [
@@ -70,7 +71,8 @@ def existing_paths() -> list[Path]:
         ROOT / "config" / "litellm.yaml",
         ROOT / "launch.py",
         ROOT / "restore.py",
-        ROOT / "bin" / ("megatron.cmd" if os.name == "nt" else "megatron"),
+        ROOT / "bin" / ((command_name + ".cmd") if os.name == "nt" else command_name),
+        COMMAND_NAME_FILE,
     ]
     if os.name != "nt":
         managed.append(home / ".local" / "bin" / "megatron")
@@ -452,23 +454,23 @@ def write_text_safely(path: Path, content: str) -> None:
         os.chmod(path, 0o600 if path.name in ("credentials.json",) else 0o644)
 
 
-def install_launchers() -> Path:
+def install_launchers(command_name: str) -> Path:
     bin_dir = ROOT / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
-        launcher = bin_dir / "megatron.cmd"
+        launcher = bin_dir / (command_name + ".cmd")
         content = '@echo off\r\n"%LOCALAPPDATA%\\Megatron\\venv\\Scripts\\python.exe" "%LOCALAPPDATA%\\Megatron\\launch.py" %*\r\n'
         write_text_safely(launcher, content)
         return launcher
 
-    launcher = bin_dir / "megatron"
+    launcher = bin_dir / command_name
     content = '#!/usr/bin/env sh\nexec "' + str(VENV / "bin" / "python") + '" "' + str(ROOT / "launch.py") + '" "$@"\n'
     write_text_safely(launcher, content)
     os.chmod(launcher, 0o700)
 
     user_bin = Path.home() / ".local" / "bin"
     user_bin.mkdir(parents=True, exist_ok=True)
-    wrapper = user_bin / "megatron"
+    wrapper = user_bin / command_name
     wrapper_content = '#!/usr/bin/env sh\nexec "' + str(launcher) + '" "$@"\n'
     write_text_safely(wrapper, wrapper_content)
     os.chmod(wrapper, 0o700)
@@ -488,10 +490,52 @@ def install_launchers() -> Path:
             with rc.open("a", encoding="utf-8") as handle:
                 if previous and not previous.endswith("\n"):
                     handle.write("\n")
-                handle.write("\n# Added by Megatron so the `megatron` command is available.\n" + line + "\n")
+                handle.write("\n# Added by Megatron so the selected terminal command is available.\n" + line + "\n")
     except (OSError, RuntimeError) as exc:
         say(f"Note: could not add ~/.local/bin to your shell PATH automatically ({exc}). Use the full launcher path: {launcher}")
     return wrapper
+
+
+def choose_command_name() -> str:
+    """Ask for a safe terminal command name; preserve the existing choice by default."""
+    previous = ""
+    try:
+        if COMMAND_NAME_FILE.is_file():
+            previous = COMMAND_NAME_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    default = previous or "megatron"
+    say("Choose the terminal command used to launch Megatron.")
+    say("Use letters/numbers, hyphens or underscores; do not include a path or spaces.")
+    while True:
+        value = input(f"Terminal command [{default}]: ").strip() or default
+        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,31}", value):
+            return value
+        say("Invalid command name. Start with a letter and use only letters, numbers, '-' or '_' (maximum 32 characters).")
+
+
+def add_windows_user_path(directory: Path) -> None:
+    """Persist the launcher's directory in the current user's PATH without setx truncation."""
+    if os.name != "nt":
+        return
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_READ | winreg.KEY_WRITE)
+        try:
+            try:
+                current, _kind = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                current = ""
+            entries = [entry.strip().rstrip("\\") for entry in current.split(";") if entry.strip()]
+            target = str(directory).rstrip("\\")
+            if target.lower() not in [entry.lower() for entry in entries]:
+                entries.append(target)
+                winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, ";".join(entries))
+            os.environ["PATH"] = str(directory) + os.pathsep + os.environ.get("PATH", "")
+        finally:
+            winreg.CloseKey(key)
+    except (OSError, ImportError) as exc:
+        say(f"Note: could not add the launcher folder to your Windows user PATH automatically ({exc}). Use the full path shown below.")
 
 
 def main() -> int:
@@ -509,7 +553,9 @@ def main() -> int:
 
     try:
         ROOT.mkdir(parents=True, exist_ok=True)
-        backup = create_backup(existing_paths())
+        command_name = choose_command_name()
+        say(f"Selected terminal command: {command_name}\n")
+        backup = create_backup(existing_paths(command_name))
         say(f"Backup created: {backup}")
 
         # Detect an existing key before replacing managed files; nothing is sourced or evaluated.
@@ -533,7 +579,10 @@ def main() -> int:
         write_text_safely(CREDENTIALS, json.dumps({"NVIDIA_API_KEY": key, "LITELLM_MASTER_KEY": master}, indent=2) + "\n")
         LOGS.mkdir(parents=True, exist_ok=True)
         restrict_permissions(ROOT)
-        launcher = install_launchers()
+        write_text_safely(COMMAND_NAME_FILE, command_name + "\n")
+        launcher = install_launchers(command_name)
+        if os.name == "nt":
+            add_windows_user_path(launcher.parent)
 
         say("\nRunning final local configuration checks...")
         expected_python = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -558,11 +607,12 @@ def main() -> int:
         say(f"Launcher: {launcher}")
         say("\nStart Nemotron:")
         if os.name == "nt":
-            say(f'  & "{launcher}"')
-            say(f'  & "{launcher}" fast    # faster reasoning setting')
+            say(f"  {command_name}")
+            say(f"  {command_name} fast    # faster reasoning setting")
+            say(f'  Full path: "{launcher}"')
         else:
-            say("  megatron")
-            say("  megatron fast    # faster reasoning setting")
+            say(f"  {command_name}")
+            say(f"  {command_name} fast    # faster reasoning setting")
             if not (Path.home() / ".local" / "bin") in [Path(x) for x in os.environ.get("PATH", "").split(os.pathsep) if x]:
                 say(f"  Full path: {launcher}")
         say("\nTo restore a previous backup, run:")
@@ -571,7 +621,7 @@ def main() -> int:
         else:
             say(f'  "{VENV / "bin" / "python"}" "{ROOT / "restore.py"}"')
         say("\nNo API keys were added to the repository.")
-        say("Close and reopen your terminal if the `megatron` command is not found yet.")
+        say(f"Close and reopen your terminal if the `{command_name}` command is not found yet.")
         return 0
     except KeyboardInterrupt:
         say("\nInstallation cancelled. The pre-install backup has been kept.")
