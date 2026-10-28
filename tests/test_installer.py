@@ -133,8 +133,8 @@ class SyntaxTests(unittest.TestCase):
 
     def test_litellm_config_has_two_aliases_and_local_master_key(self) -> None:
         text = (REPO / "config" / "litellm.yaml").read_text(encoding="utf-8")
-        self.assertIn("model_name: nemotron", text)
-        self.assertIn("model_name: nemotron-fast", text)
+        self.assertIn("model_name: claude-nemotron", text)
+        self.assertIn("model_name: claude-nemotron-fast", text)
         self.assertIn("master_key: os.environ/LITELLM_MASTER_KEY", text)
         self.assertIn("enable_thinking: false", text)
 
