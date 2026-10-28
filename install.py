@@ -102,11 +102,12 @@ def existing_paths(command_name: str = "megatron") -> list[Path]:
 
 
 def repair_windows_access(path: Path) -> None:
-    """Restore the current user's access to Megatron files after a bad/inherited ACL."""
+    """Try to recover access to Megatron files after a restrictive Windows ACL."""
     if os.name != "nt" or not path.exists():
         return
     icacls = shutil.which("icacls.exe") or shutil.which("icacls")
     whoami = shutil.which("whoami.exe") or shutil.which("whoami")
+    takeown = shutil.which("takeown.exe") or shutil.which("takeown")
     if not icacls or not whoami:
         return
     try:
@@ -115,15 +116,34 @@ def repair_windows_access(path: Path) -> None:
             capture_output=True, text=True, check=False, timeout=10,
         )
         match = re.search(r"S-1-\d+(?:-\d+)+", identity.stdout)
-        if identity.returncode == 0 and match:
-            # Grant this user full access without removing existing ACL entries.
-            subprocess.run(
-                [icacls, str(path), "/grant", f"*{match.group(0)}:(OI)(CI)F", "/T", "/C"],
-                capture_output=True, text=True, check=False, timeout=60,
-            )
-    except (OSError, subprocess.SubprocessError):
-        pass
+        if identity.returncode != 0 or not match:
+            say("Warning: could not determine the current Windows user's SID for permission repair.")
+            return
+        sid = match.group(0)
 
+        # First try a non-destructive grant, preserving existing ACL entries.
+        grant = subprocess.run(
+            [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
+            capture_output=True, text=True, check=False, timeout=90,
+        )
+        if grant.returncode == 0:
+            return
+
+        # If the current user cannot update the ACL, try taking ownership of this
+        # app-specific directory, then grant access. This does not touch other folders.
+        if takeown:
+            subprocess.run(
+                [takeown, "/F", str(path), "/R", "/D", "Y"],
+                capture_output=True, text=True, check=False, timeout=120,
+            )
+            grant = subprocess.run(
+                [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
+                capture_output=True, text=True, check=False, timeout=120,
+            )
+        if grant.returncode != 0:
+            say("Warning: Windows permission repair did not fully succeed. Megatron will still protect existing files and stop if backup is incomplete.")
+    except (OSError, subprocess.SubprocessError) as exc:
+        say(f"Warning: Windows permission repair could not complete ({type(exc).__name__}).")
 
 def create_backup(paths: Iterable[Path]) -> Path:
     """Make a timestamped, local backup before the installer changes any managed files."""
