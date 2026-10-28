@@ -101,8 +101,35 @@ def existing_paths(command_name: str = "megatron") -> list[Path]:
     return list(dict.fromkeys(paths))
 
 
+def repair_windows_access(path: Path) -> None:
+    """Restore the current user's access to Megatron files after a bad/inherited ACL."""
+    if os.name != "nt" or not path.exists():
+        return
+    icacls = shutil.which("icacls.exe") or shutil.which("icacls")
+    whoami = shutil.which("whoami.exe") or shutil.which("whoami")
+    if not icacls or not whoami:
+        return
+    try:
+        identity = subprocess.run(
+            [whoami, "/user", "/fo", "csv", "/nh"],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        match = re.search(r"S-1-\\d+(?:-\\d+)+", identity.stdout)
+        if identity.returncode == 0 and match:
+            # Grant this user full access without removing existing ACL entries.
+            subprocess.run(
+                [icacls, str(path), "/grant", f"*{match.group(0)}:(OI)(CI)F", "/T", "/C"],
+                capture_output=True, text=True, check=False, timeout=60,
+            )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def create_backup(paths: Iterable[Path]) -> Path:
     """Make a timestamped, local backup before the installer changes any managed files."""
+    # Older releases may have applied a restrictive Windows ACL incorrectly.
+    # Repair access before attempting to back up any existing configuration.
+    repair_windows_access(ROOT)
     stamp = datetime.now().astimezone().strftime("%Y-%m-%d_%H-%M-%S_%z")
     destination = BACKUPS / stamp
     suffix = 1
