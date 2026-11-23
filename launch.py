@@ -140,9 +140,8 @@ def main() -> int:
         # window explicitly. The neutral alias avoids the special bare
         # "claude-*" ID handling in Claude Code's context-window resolver.
         env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = "262144"
-        # Register the active LiteLLM alias as a Claude Code custom model
-        # option. This prevents the "model isn't recognized" notice while
-        # preserving the exact model ID sent through the gateway.
+        # Register the active LiteLLM alias as a selectable custom model.
+        # The explicit context size above separately configures compaction.
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = mode
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = (
             "Nemotron Fast" if mode == "nemotron-fast" else "Nemotron High"
