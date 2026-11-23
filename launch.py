@@ -62,6 +62,12 @@ def ensure_proxy(credentials: dict[str, str]) -> None:
     env = os.environ.copy()
     env["NVIDIA_API_KEY"] = credentials["NVIDIA_API_KEY"]
     env["LITELLM_MASTER_KEY"] = credentials["LITELLM_MASTER_KEY"]
+    if os.name == "nt":
+        # LiteLLM's startup banner contains Unicode characters. Windows
+        # terminals may default to cp1252, which can crash Click during
+        # startup before the proxy binds to its local port.
+        env["PYTHONUTF8"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
     command = [
         str(find_litellm()),
         "--config", str(config),
