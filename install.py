@@ -152,7 +152,7 @@ def create_backup(paths: Iterable[Path]) -> Path:
             # parent directory; never skip credentials or model configuration.
             regenerable = os.name == "nt" and (
                 source == COMMAND_NAME_FILE
-                or source == ROOT / "bin" / (command_name + ".cmd")
+                or (source.parent == ROOT / "bin" and source.suffix.lower() == ".cmd")
             )
             if regenerable and isinstance(exc, OSError):
                 manifest["files"].append({
