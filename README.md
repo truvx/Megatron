@@ -35,8 +35,8 @@ During setup, choose a command name such as `megatron`, `nemotron`, or `my-ai`. 
 
 For the default name, common commands are:
 
-- `megatron` — start Claude Code using the `claude-nemotron` alias.
-- `megatron fast` — start Claude Code using the `claude-nemotron-fast` alias.
+- `megatron` — start Claude Code using the `nemotron-high` alias.
+- `megatron fast` — start Claude Code using the `nemotron-fast` alias.
 
 On Windows, use the full `megatron.cmd` path printed by the installer in PowerShell, for example:
 
