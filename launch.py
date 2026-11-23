@@ -135,6 +135,16 @@ def main() -> int:
         env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{PORT}"
         env["ANTHROPIC_AUTH_TOKEN"] = credentials["LITELLM_MASTER_KEY"]
         env["ANTHROPIC_MODEL"] = mode
+        # Register the active LiteLLM alias as a Claude Code custom model
+        # option. This prevents the "model isn't recognized" notice while
+        # preserving the exact model ID sent through the gateway.
+        env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = mode
+        env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = (
+            "Nemotron Fast" if mode == "claude-nemotron-fast" else "Nemotron High"
+        )
+        env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = (
+            "NVIDIA Nemotron 3.5 Super VL routed through Megatron and LiteLLM."
+        )
         env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-nemotron-fast"
         env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = mode
         env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = mode
