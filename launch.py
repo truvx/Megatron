@@ -120,7 +120,7 @@ def find_claude() -> str | None:
 
 
 def main() -> int:
-    mode = "claude-nemotron-fast" if len(sys.argv) > 1 and sys.argv[1].lower() in {"fast", "--fast", "nemotron-fast", "claude-nemotron-fast"} else "claude-nemotron"
+    mode = "nemotron-fast" if len(sys.argv) > 1 and sys.argv[1].lower() in {"fast", "--fast", "nemotron-fast", "claude-nemotron-fast"} else "nemotron-high"
     try:
         if not CREDENTIALS.is_file():
             print("Megatron is not configured. Run Start-Megatron.command/.sh/.cmd first.", file=sys.stderr)
@@ -135,17 +135,22 @@ def main() -> int:
         env["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{PORT}"
         env["ANTHROPIC_AUTH_TOKEN"] = credentials["LITELLM_MASTER_KEY"]
         env["ANTHROPIC_MODEL"] = mode
+        # NVIDIA's hosted endpoint currently advertises a 262K-token context.
+        # This is a gateway/custom model ID, so tell Claude Code the actual
+        # window explicitly. The neutral alias avoids the special bare
+        # "claude-*" ID handling in Claude Code's context-window resolver.
+        env["CLAUDE_CODE_MAX_CONTEXT_TOKENS"] = "262144"
         # Register the active LiteLLM alias as a Claude Code custom model
         # option. This prevents the "model isn't recognized" notice while
         # preserving the exact model ID sent through the gateway.
         env["ANTHROPIC_CUSTOM_MODEL_OPTION"] = mode
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"] = (
-            "Nemotron Fast" if mode == "claude-nemotron-fast" else "Nemotron High"
+            "Nemotron Fast" if mode == "nemotron-fast" else "Nemotron High"
         )
         env["ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION"] = (
             "NVIDIA Nemotron 3.5 Super VL routed through Megatron and LiteLLM."
         )
-        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-nemotron-fast"
+        env["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "nemotron-fast"
         env["ANTHROPIC_DEFAULT_SONNET_MODEL"] = mode
         env["ANTHROPIC_DEFAULT_OPUS_MODEL"] = mode
         env.pop("ANTHROPIC_API_KEY", None)
