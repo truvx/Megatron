@@ -225,43 +225,24 @@ def create_backup(paths: Iterable[Path]) -> Path:
 
 
 def restrict_permissions(path: Path) -> None:
-    """Restrict a tree to the current user without stripping executable bits from runtimes."""
-    if os.name != "nt":
-        try:
-            if path.is_dir():
-                os.chmod(path, 0o700)
-                for item in path.rglob("*"):
-                    if item.is_dir():
-                        os.chmod(item, 0o700)
-                    elif item.is_file() and item.name == "manifest.json":
-                        os.chmod(item, 0o600)
-            elif path.is_file():
-                os.chmod(path, 0o600)
-        except OSError:
-            pass
-    else:
-        # Use the current user's SID rather than DOMAIN\USERNAME, which may be ambiguous
-        # on standalone PCs. Retain SYSTEM and Administrators access for maintenance.
-        icacls = shutil.which("icacls.exe") or shutil.which("icacls")
-        whoami = shutil.which("whoami.exe") or shutil.which("whoami")
-        if icacls and whoami:
-            try:
-                identity = subprocess.run(
-                    [whoami, "/user", "/fo", "csv", "/nh"],
-                    capture_output=True, text=True, check=False, timeout=10,
-                )
-                match = re.search(r"S-1-\d+(?:-\d+)+", identity.stdout)
-                if identity.returncode == 0 and match:
-                    user_sid = match.group(0)
-                    subprocess.run(
-                        [icacls, str(path), "/inheritance:r", "/grant:r", f"*{user_sid}:(OI)(CI)F",
-                         "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "/T", "/C"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=30,
-                    )
-            except Exception:
-                # Leave the files in user-scoped LocalAppData rather than risk locking
-                # the owner out when Windows security utilities are unavailable.
-                pass
+    """Restrict sensitive files on POSIX; rely on Windows profile ACLs on Windows."""
+    if os.name == "nt":
+        # Megatron lives under the current user's LocalAppData, which already has
+        # per-user Windows ACLs. Recursively rewriting ACLs with icacls has caused
+        # access-denied failures on existing files and can lock users out.
+        return
+    try:
+        if path.is_dir():
+            os.chmod(path, 0o700)
+            for item in path.rglob("*"):
+                if item.is_dir():
+                    os.chmod(item, 0o700)
+                elif item.is_file() and item.name == "manifest.json":
+                    os.chmod(item, 0o600)
+        elif path.is_file():
+            os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def read_legacy_credentials() -> dict[str, str]:
@@ -577,10 +558,24 @@ def install_python_environment() -> Path:
 
 
 def write_text_safely(path: Path, content: str) -> None:
+    """Write via a sibling temporary file so stale protected files can be replaced."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8", newline="\n")
-    if os.name != "nt":
-        os.chmod(path, 0o600 if path.name in ("credentials.json",) else 0o644)
+    temporary = path.with_name(path.name + ".megatron-tmp")
+    try:
+        temporary.write_text(content, encoding="utf-8", newline="\\n")
+        if os.name == "nt" and path.exists():
+            # Replace through the writable parent directory rather than opening
+            # the old file for in-place writing (which may have stale ACLs).
+            os.replace(temporary, path)
+        else:
+            temporary.replace(path)
+        if os.name != "nt":
+            os.chmod(path, 0o600 if path.name == "credentials.json" else 0o644)
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def install_launchers(command_name: str) -> Path:
