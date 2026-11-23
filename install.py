@@ -515,7 +515,7 @@ def write_text_safely(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + ".megatron-tmp")
     try:
-        temporary.write_text(content, encoding="utf-8", newline="\\n")
+        temporary.write_text(content, encoding="utf-8", newline="\n")
         if os.name == "nt" and path.exists():
             # Replace through the writable parent directory rather than opening
             # the old file for in-place writing (which may have stale ACLs).
