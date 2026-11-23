@@ -102,79 +102,13 @@ def existing_paths(command_name: str = "megatron") -> list[Path]:
 
 
 def repair_windows_access(path: Path) -> None:
-    """Best-effort repair of restrictive Windows ACLs; never let repair itself abort setup."""
-    # Some Windows installations deny metadata access to an old virtual environment.
-    # Even Path.exists()/shutil.which() can raise PermissionError on those systems,
-    # so all discovery and repair work must be inside the guarded block.
-    if os.name != "nt":
-        return
-    try:
-        if not path.exists():
-            return
-        icacls = shutil.which("icacls.exe") or shutil.which("icacls")
-        whoami = shutil.which("whoami.exe") or shutil.which("whoami")
-        takeown = shutil.which("takeown.exe") or shutil.which("takeown")
-        if not icacls or not whoami:
-            say("Warning: Windows ACL tools were unavailable; skipping permission repair.")
-            return
-        identity = subprocess.run(
-            [whoami, "/user", "/fo", "csv", "/nh"],
-            capture_output=True, text=True, check=False, timeout=10,
-        )
-        match = re.search(r"S-1-\d+(?:-\d+)+", identity.stdout)
-        if identity.returncode != 0 or not match:
-            say("Warning: could not determine the current Windows user's SID for permission repair.")
-            return
-        sid = match.group(0)
+    """No-op on Windows: do not recursively take ownership or rewrite user ACLs."""
+    # Earlier installers attempted takeown /R and icacls /T here. On some PCs
+    # this hangs and can leave generated launcher files inaccessible. The app
+    # is already inside the user's LocalAppData; use normal inherited ACLs and
+    # atomic replacement for managed files instead.
+    return
 
-        # icacls /C can return success even when individual files failed. Do not
-        # treat its exit code alone as proof that the ACL repair worked.
-        if takeown:
-            subprocess.run(
-                [takeown, "/F", str(path), "/R", "/D", "Y"],
-                capture_output=True, text=True, check=False, timeout=120,
-            )
-        subprocess.run(
-            [icacls, str(path), "/grant", f"*{sid}:(OI)(CI)F", "/T", "/C"],
-            capture_output=True, text=True, check=False, timeout=120,
-        )
-
-        # Repair the exact files that previously caused backup failures. Grant
-        # access to each file explicitly as well as the containing directory.
-        critical_files = [
-            path / "credentials.json",
-            path / "config" / "litellm.yaml",
-            path / "launch.py",
-            path / "restore.py",
-        ]
-        for target in critical_files:
-            if not target.exists():
-                continue
-            try:
-                with target.open("rb") as handle:
-                    handle.read(1)
-                continue
-            except OSError:
-                pass
-            if takeown:
-                subprocess.run(
-                    [takeown, "/F", str(target)],
-                    capture_output=True, text=True, check=False, timeout=30,
-                )
-            subprocess.run(
-                [icacls, str(target), "/grant", f"*{sid}:F", "/C"],
-                capture_output=True, text=True, check=False, timeout=30,
-            )
-            try:
-                with target.open("rb") as handle:
-                    handle.read(1)
-            except OSError:
-                say(f"Warning: Windows permission repair could not restore read access to {target}.")
-    except Exception as exc:
-        # Permission repair is only a recovery aid. An inaccessible legacy venv
-        # must be reported by the subsequent guarded Python/validation step, not
-        # escape here as an unhelpful bare [WinError 5].
-        say(f"Warning: Windows permission repair could not complete ({type(exc).__name__}: {exc}).")
 
 def create_backup(paths: Iterable[Path]) -> Path:
     """Make a timestamped, local backup before the installer changes any managed files."""
@@ -210,8 +144,27 @@ def create_backup(paths: Iterable[Path]) -> Path:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
             manifest["files"].append({"original_path": str(source), "existed": True, "backup_file": rel.as_posix()})
-        except Exception as exc:  # stop before making any configuration changes
-            failures.append(f"{source}: {exc}")
+        except Exception as exc:
+            # On Windows, the selected command launcher and its command-name
+            # marker are disposable generated files, not user configuration or
+            # secrets. Older releases may have left restrictive ACLs on them.
+            # Record the omission and allow atomic recreation from the writable
+            # parent directory; never skip credentials or model configuration.
+            regenerable = os.name == "nt" and (
+                source == COMMAND_NAME_FILE
+                or source == ROOT / "bin" / (command_name + ".cmd")
+            )
+            if regenerable and isinstance(exc, OSError):
+                manifest["files"].append({
+                    "original_path": str(source),
+                    "existed": True,
+                    "backup_file": None,
+                    "backup_status": "skipped_unreadable_regenerable_file",
+                    "reason": str(exc),
+                })
+                say(f"Note: could not read old generated launcher file; it will be recreated: {source}")
+            else:
+                failures.append(f"{source}: {exc}")
     manifest_path = destination / "manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     restrict_permissions(destination)
