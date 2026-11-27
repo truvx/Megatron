@@ -344,6 +344,7 @@ def claude_command() -> list[str] | None:
             if candidate not in home_values:
                 home_values.append(candidate)
     homes = home_values
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
     common = []
     for candidate_home in homes:
         common += [
