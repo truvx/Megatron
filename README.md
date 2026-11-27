@@ -95,7 +95,7 @@ The installer downloads and executes software from the respective vendors (Anthr
 - **NVIDIA key rejected:** Re-check the key and ensure the model endpoint is enabled on NVIDIA's API page. A transient rate limit or connectivity error may require a retry.
 - **LiteLLM fails to start:** See the local log at `logs/litellm.log` inside the Megatron application-data folder. Check it for private information before sharing.
 - **Port 4000 is already used:** Stop the other local service using that port, then run Megatron again. The current configuration uses `127.0.0.1:4000`.
-- **Claude Code is not found after install:** Open a new terminal and rerun the corresponding starter. The installer checks the version before declaring success.
+- **Claude Code is not found after install on Windows:** Megatron checks both `HOME` and `USERPROFILE` because some engineering software sets `HOME` to a separate directory (for example, `C:\\SPB_Data`). It detects Claude Code in the actual `$HOME\\.local\\bin` location and adds that directory to the current session and the user's PATH. If you previously installed Claude Code while Megatron could not find it, rerun the latest `Start-Megatron.cmd`; do not reinstall Claude Code.
 
 ## Dependency security
 
