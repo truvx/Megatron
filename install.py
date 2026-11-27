@@ -329,11 +329,21 @@ def claude_command() -> list[str] | None:
     # On Windows, Path.home() can follow a stale/misconfigured HOME variable
     # (for example a redirected drive) even though Anthropic's installer writes
     # to the actual Windows profile. Prefer USERPROFILE and check both homes.
-    home = Path(os.environ.get("USERPROFILE") or Path.home())
-    homes = [home]
-    env_home = Path.home()
-    if env_home != home:
-        homes.append(env_home)
+    # Anthropic's native Windows installer uses HOME for its binary directory,
+    # while Windows/Python normally resolve Path.home() from USERPROFILE. Some
+    # engineering software (notably Cadence) sets HOME=C:\\SPB_Data, so the
+    # Claude executable can legitimately live outside the Windows profile.
+    home_values = []
+    for value in (
+        os.environ.get("HOME"),
+        os.environ.get("USERPROFILE"),
+        str(Path.home()),
+    ):
+        if value:
+            candidate = Path(value).expanduser()
+            if candidate not in home_values:
+                home_values.append(candidate)
+    homes = home_values
     common = []
     for candidate_home in homes:
         common += [
@@ -387,6 +397,13 @@ def run_claude(command: list[str], arguments: list[str], timeout: int = 60) -> s
 def install_or_update_claude() -> list[str]:
     command = claude_command()
     if command:
+        # Keep the discovered executable usable in both this process and future
+        # terminals. This is especially important when HOME differs from USERPROFILE.
+        if os.name == "nt":
+            executable = Path(command[0])
+            if executable.is_file():
+                add_path_front(executable.parent)
+                add_windows_user_path(executable.parent)
         method = claude_install_method(command)
         say(f"Claude Code is already installed (detected method: {method}). Updating it through the terminal...")
         no_update_available = False
@@ -439,7 +456,11 @@ def install_or_update_claude() -> list[str]:
             raise RuntimeError("Windows PowerShell was not found. Open Windows PowerShell and rerun Start-Megatron.cmd.")
         cmd = [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"]
         result = run_command(cmd, timeout=900)
-        add_path_front(Path.home() / ".local" / "bin")
+        # Anthropic installs under $HOME on Windows. Do not assume that HOME
+        # and USERPROFILE point to the same directory.
+        install_home = Path(os.environ.get("HOME") or os.environ.get("USERPROFILE") or Path.home())
+        install_bin = install_home / ".local" / "bin"
+        add_path_front(install_bin)
     else:
         result = run_command(["bash", "-lc", "curl -fsSL https://claude.ai/install.sh | bash"], timeout=900)
         add_path_front(Path.home() / ".local" / "bin")
@@ -448,7 +469,18 @@ def install_or_update_claude() -> list[str]:
         raise RuntimeError("Anthropic's Claude Code terminal installer failed. Read the terminal output above and retry.")
     command = claude_command()
     if not command:
-        raise RuntimeError("Claude Code's installer finished, but the `claude` command was not found in this terminal session. Open a new terminal and rerun Megatron.")
+        searched = [
+            str(Path(value) / ".local" / "bin" / "claude.exe")
+            for value in (os.environ.get("HOME"), os.environ.get("USERPROFILE"))
+            if value
+        ]
+        detail = " Checked HOME and USERPROFILE install locations: " + "; ".join(dict.fromkeys(searched)) + "."
+        raise RuntimeError("Claude Code's installer finished, but its executable could not be located." + detail)
+    if os.name == "nt":
+        executable = Path(command[0])
+        if executable.is_file():
+            add_path_front(executable.parent)
+            add_windows_user_path(executable.parent)
     version = run_claude(command, ["--version"], timeout=60)
     if version.returncode != 0:
         raise RuntimeError("Claude Code installed, but its version check failed. Rerun Megatron after checking the output above.")
