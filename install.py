@@ -326,10 +326,24 @@ def claude_command() -> list[str] | None:
     found = shutil.which("claude") or shutil.which("claude.exe") or shutil.which("claude.cmd")
     if found:
         return [found]
-    home = Path.home()
-    common = [home / ".local" / "bin" / "claude", home / ".local" / "bin" / "claude.exe"]
+    # On Windows, Path.home() can follow a stale/misconfigured HOME variable
+    # (for example a redirected drive) even though Anthropic's installer writes
+    # to the actual Windows profile. Prefer USERPROFILE and check both homes.
+    home = Path(os.environ.get("USERPROFILE") or Path.home())
+    homes = [home]
+    env_home = Path.home()
+    if env_home != home:
+        homes.append(env_home)
+    common = []
+    for candidate_home in homes:
+        common += [
+            candidate_home / ".local" / "bin" / "claude",
+            candidate_home / ".local" / "bin" / "claude.exe",
+        ]
     if os.name == "nt":
-        common += [Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "Programs" / "ClaudeCode" / "claude.exe"]
+        common += [
+            Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local")) / "Programs" / "ClaudeCode" / "claude.exe"
+        ]
     for path in common:
         if path.is_file():
             add_path_front(path.parent)
